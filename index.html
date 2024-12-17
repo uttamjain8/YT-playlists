@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Playlist Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Roboto', sans-serif;
+        }
+
+        body {
+            background-color: #181818;
+            color: #fff;
+            padding: 1rem;
+        }
+
+        h1 {
+            margin-bottom: 1rem;
+        }
+
+        .input-area {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            background-color: #202020;
+            padding: 1rem;
+            border-radius: 8px;
+        }
+
+        input, button {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            background-color: #121212;
+            color: #fff;
+            outline: none;
+        }
+
+        button {
+            background-color: #cc0000;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #e60000;
+        }
+
+        .chips {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .chip {
+            background-color: #505050;
+            padding: 6px 12px;
+            border-radius: 12px;
+            cursor: pointer;
+        }
+
+        .chip.selected {
+            background-color: #cc0000;
+        }
+
+        .section-title {
+            font-size: 1.2rem;
+            margin: 1rem 0;
+            border-bottom: 1px solid #303030;
+            padding-bottom: 5px;
+        }
+
+        .playlists-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .playlist-card {
+            background-color: #202020;
+            padding: 8px;
+            border-radius: 8px;
+            text-align: center;
+            transition: transform 0.3s;
+        }
+
+        .playlist-card:hover {
+            transform: scale(1.05);
+            cursor: pointer;
+        }
+
+        iframe {
+            width: 100%;
+            height: 120px;
+            border-radius: 8px;
+        }
+
+        .playlist-name {
+            font-weight: bold;
+            margin-top: 8px;
+            color: #ffffff;
+        }
+
+        .tags {
+            font-size: 0.9rem;
+            color: #aaaaaa;
+            margin-top: 4px;
+        }
+
+        .popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s;
+        }
+
+        .popup-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .popup-content {
+            background-color: #202020;
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            width: 90%;
+            max-width: 800px;
+        }
+
+        .import-export {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>YouTube Playlist Manager</h1>
+
+    <!-- Input Section -->
+    <div class="input-area">
+        <input id="playlistName" placeholder="Playlist Name">
+        <input id="playlistLink" placeholder="Paste YouTube Playlist Link">
+        <div>
+            <span>Category:</span>
+            <div id="categoryChips" class="chips"></div>
+            <input id="categoryInput" placeholder="Add New Category">
+        </div>
+        <div>
+            <span>Tags:</span>
+            <div id="tagChips" class="chips"></div>
+            <input id="tagInput" placeholder="Add New Tags (comma-separated)">
+        </div>
+        <button onclick="addPlaylist()">Add Playlist</button>
+    </div>
+
+    <!-- Playlist Sections -->
+    <div id="playlistSections"></div>
+
+    <!-- Popup -->
+    <div id="popupOverlay" class="popup-overlay">
+        <div class="popup-content">
+            <button onclick="closePopup()">Close</button>
+            <iframe id="popupIframe"></iframe>
+        </div>
+    </div>
+
+    <!-- Import/Export -->
+    <div class="import-export">
+        <button onclick="exportData()">Export</button>
+        <button onclick="importData()">Import</button>
+    </div>
+
+    <script>
+        let playlists = JSON.parse(localStorage.getItem('playlists')) || [];
+        let categories = new Set(playlists.map(p => p.category));
+        let tags = new Set(playlists.flatMap(p => p.tags));
+
+        function addPlaylist() {
+            const name = document.getElementById('playlistName').value.trim();
+            const link = document.getElementById('playlistLink').value.trim();
+            const category = document.getElementById('categoryInput').value.trim();
+            const tagInput = document.getElementById('tagInput').value.trim();
+
+            if (!name || !link || !category) return alert('Playlist name, link, and category are required!');
+
+            const playlist = {
+                name,
+                link,
+                category,
+                tags: tagInput ? tagInput.split(',').map(tag => tag.trim()) : []
+            };
+
+            playlists.push(playlist);
+            categories.add(category);
+            playlist.tags.forEach(tag => tags.add(tag));
+            saveAndRender();
+        }
+
+        function saveAndRender() {
+            localStorage.setItem('playlists', JSON.stringify(playlists));
+            renderPlaylists();
+            renderChips();
+        }
+
+        function renderPlaylists() {
+            const sections = {};
+            playlists.forEach(p => {
+                if (!sections[p.category]) sections[p.category] = [];
+                sections[p.category].push(p);
+            });
+
+            const container = document.getElementById('playlistSections');
+            container.innerHTML = '';
+
+            Object.keys(sections).forEach(category => {
+                const section = document.createElement('div');
+                section.innerHTML = `
+                    <div class="section-title">${category}</div>
+                    <div class="playlists-grid">${sections[category]
+                        .map(p => `
+                            <div class="playlist-card" onclick="openPopup('${p.link}')">
+                                <iframe src="https://www.youtube.com/embed/videoseries?list=${p.link}" allowfullscreen></iframe>
+                                <div class="playlist-name">${p.name}</div>
+                                <div class="tags">${p.tags.join(', ')}</div>
+                            </div>
+                        `).join('')}
+                    </div>`;
+                container.appendChild(section);
+            });
+        }
+
+        function renderChips() {
+            const categoryChips = document.getElementById('categoryChips');
+            categoryChips.innerHTML = [...categories]
+                .map(c => `<div class="chip" onclick="selectCategory('${c}')">${c}</div>`).join('');
+
+            const tagChips = document.getElementById('tagChips');
+            tagChips.innerHTML = [...tags]
+                .map(t => `<div class="chip" onclick="selectTag('${t}')">${t}</div>`).join('');
+        }
+
+        function selectCategory(category) {
+            document.getElementById('categoryInput').value = category;
+        }
+
+        function selectTag(tag) {
+            let input = document.getElementById('tagInput');
+            input.value = input.value ? `${input.value}, ${tag}` : tag;
+        }
+
+        function openPopup(link) {
+            document.getElementById('popupIframe').src = `https://www.youtube.com/embed/videoseries?list=${link}`;
+            document.getElementById('popupOverlay').classList.add('active');
+        }
+
+        function closePopup() {
+            document.getElementById('popupIframe').src = '';
+            document.getElementById('popupOverlay').classList.remove('active');
+        }
+
+        function exportData() {
+            const data = JSON.stringify(playlists);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'playlists.json';
+            a.click();
+        }
+
+        function importData() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = e => {
+                const file = e.target.files[0];
+                const reader = new FileReader();
+                reader.onload = () => {
+                    playlists = JSON.parse(reader.result);
+                    saveAndRender();
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+
+        renderPlaylists();
+        renderChips();
+    </script>
+</body>
+</html>
